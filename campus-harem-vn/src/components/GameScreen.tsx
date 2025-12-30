@@ -86,13 +86,38 @@ function GameScreen() {
     if (nodeId.includes('library')) return 'library';
     if (nodeId.includes('night')) return 'night';
     if (nodeId.includes('roof')) return 'rooftop';
-    return 'campus';
+    return 'classroom'; // 기본 배경을 교실로 변경
+  };
+
+  // 배경 이미지 경로
+  const getBackgroundImage = () => {
+    const bgType = getBackgroundType();
+    const bgMap: Record<string, string> = {
+      classroom: '/backgrounds/classroom.png',
+      library: '/backgrounds/library.png',
+      cafe: '/backgrounds/cafe.png',
+      campus: '/backgrounds/classroom.png',
+      night: '/backgrounds/classroom.png',
+      rooftop: '/backgrounds/classroom.png',
+    };
+    return bgMap[bgType] || '/backgrounds/classroom.png';
   };
 
   return (
     <div className="game-screen">
       {/* 배경 레이어 */}
       <div className={`game-background ${getBackgroundType()}`}>
+        <img
+          src={getBackgroundImage()}
+          alt="background"
+          className="bg-image"
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            imageRendering: 'pixelated',
+          }}
+        />
         <div className="bg-overlay" />
       </div>
 
