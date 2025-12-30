@@ -5,6 +5,7 @@ import TextBox from './TextBox';
 import ChoiceButtons from './ChoiceButtons';
 import LogModal from './LogModal';
 import SettingsModal from './SettingsModal';
+import SaveLoadModal from './SaveLoadModal';
 import CharacterSprite from './CharacterSprite';
 
 function GameScreen() {
@@ -16,9 +17,14 @@ function GameScreen() {
     returnToTitle,
     toggleLog,
     showLog,
+    autoMode,
+    skipMode,
+    toggleAutoMode,
+    toggleSkipMode,
   } = useGameStore();
 
   const [showSettings, setShowSettings] = useState(false);
+  const [showSaveLoad, setShowSaveLoad] = useState<'save' | 'load' | null>(null);
   const { playBgm, playSfx } = useAudioStore();
 
   // 씬에 따른 BGM 자동 재생
@@ -156,10 +162,26 @@ function GameScreen() {
       {/* 상단 바 */}
       <div className="top-bar">
         <span className="chapter-info">{getChapterInfo()}</span>
+        <div className="auto-skip-controls">
+          <button
+            className={`auto-btn ${autoMode ? 'active' : ''}`}
+            onClick={() => { playSfx('click'); toggleAutoMode(); }}
+          >
+            {autoMode ? '⏸ AUTO' : '▶ AUTO'}
+          </button>
+          <button
+            className={`skip-btn ${skipMode ? 'active' : ''}`}
+            onClick={() => { playSfx('click'); toggleSkipMode(); }}
+          >
+            {skipMode ? '⏸ SKIP' : '⏩ SKIP'}
+          </button>
+        </div>
         <div className="menu-buttons">
-          <button onClick={toggleLog}>📜 로그</button>
-          <button onClick={() => setShowSettings(true)}>⚙️ 설정</button>
-          <button onClick={returnToTitle}>🏠 메뉴</button>
+          <button onClick={() => { playSfx('click'); setShowSaveLoad('save'); }}>💾</button>
+          <button onClick={() => { playSfx('click'); setShowSaveLoad('load'); }}>📂</button>
+          <button onClick={toggleLog}>📜</button>
+          <button onClick={() => setShowSettings(true)}>⚙️</button>
+          <button onClick={returnToTitle}>🏠</button>
         </div>
       </div>
 
@@ -172,6 +194,12 @@ function GameScreen() {
       {/* 모달들 */}
       {showLog && <LogModal onClose={toggleLog} />}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      {showSaveLoad && (
+        <SaveLoadModal
+          mode={showSaveLoad}
+          onClose={() => setShowSaveLoad(null)}
+        />
+      )}
     </div>
   );
 }

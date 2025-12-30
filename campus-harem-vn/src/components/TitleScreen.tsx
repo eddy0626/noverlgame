@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGameStore } from '../game/store';
 import { useAudioStore } from '../game/audioManager';
 import GalleryModal from './GalleryModal';
@@ -9,9 +9,9 @@ function TitleScreen() {
   const [showGallery, setShowGallery] = useState(false);
 
   // 타이틀 BGM 재생
-  useState(() => {
+  useEffect(() => {
     playBgm('title');
-  });
+  }, [playBgm]);
 
   const handleContinue = () => {
     if (!continueGame()) {

@@ -22,8 +22,10 @@ import {
 } from './engine';
 import { useGalleryStore, getEndingCGId } from './galleryManager';
 
-const SAVE_KEY = 'campus_harem_vn_save';
+const SAVE_KEY_PREFIX = 'campus_harem_vn_save';
+const AUTO_SAVE_KEY = 'campus_harem_vn_autosave';
 const SAVE_VERSION = '1.0.0';
+const MAX_SAVE_SLOTS = 6;
 
 interface GameStore {
   // 상태
@@ -37,6 +39,9 @@ interface GameStore {
   // 설정
   fontSize: number;
   showLog: boolean;
+  autoMode: boolean;
+  skipMode: boolean;
+  textSpeed: number; // 1-5, default 3
 
   // 액션
   loadScenario: (scenario: Scenario) => void;
@@ -46,15 +51,24 @@ interface GameStore {
   selectChoice: (choice: Choice) => void;
   advanceScene: () => void;
 
-  // 저장/로드
+  // 저장/로드 (멀티 슬롯)
   autoSave: () => void;
+  saveToSlot: (slot: number) => void;
+  loadFromSlot: (slot: number) => boolean;
   loadSave: () => boolean;
   hasSave: () => boolean;
+  hasSlotSave: (slot: number) => boolean;
+  getSlotInfo: (slot: number) => { timestamp: number; chapter: string; nodeId: string } | null;
+  getAllSaveSlots: () => (SaveData | null)[];
   deleteSave: () => void;
+  deleteSlot: (slot: number) => void;
 
   // 설정
   setFontSize: (size: number) => void;
   toggleLog: () => void;
+  toggleAutoMode: () => void;
+  toggleSkipMode: () => void;
+  setTextSpeed: (speed: number) => void;
 
   // 게임 종료
   returnToTitle: () => void;
@@ -70,6 +84,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   endingInfo: null,
   fontSize: 16,
   showLog: false,
+  autoMode: false,
+  skipMode: false,
+  textSpeed: 3,
 
   // 시나리오 로드
   loadScenario: (scenario) => {
@@ -147,6 +164,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (cgId) {
         useGalleryStore.getState().unlockCG(cgId);
       }
+      // 엔딩 자체도 해금
+      useGalleryStore.getState().unlockEnding(node.endingId);
 
       set({
         gameState: newState,
@@ -224,19 +243,65 @@ export const useGameStore = create<GameStore>((set, get) => ({
     };
 
     try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+      localStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(saveData));
     } catch (e) {
       console.error('[VN] 자동저장 실패:', e);
     }
   },
 
-  // 저장 로드
+  // 슬롯에 저장
+  saveToSlot: (slot: number) => {
+    const { gameState } = get();
+    if (!gameState || slot < 0 || slot >= MAX_SAVE_SLOTS) return;
+
+    const saveData: SaveData = {
+      state: gameState,
+      timestamp: Date.now(),
+      version: SAVE_VERSION,
+    };
+
+    try {
+      localStorage.setItem(`${SAVE_KEY_PREFIX}_${slot}`, JSON.stringify(saveData));
+    } catch (e) {
+      console.error('[VN] 슬롯 저장 실패:', e);
+    }
+  },
+
+  // 슬롯에서 로드
+  loadFromSlot: (slot: number) => {
+    const { scenario } = get();
+    if (!scenario || slot < 0 || slot >= MAX_SAVE_SLOTS) return false;
+
+    try {
+      const saved = localStorage.getItem(`${SAVE_KEY_PREFIX}_${slot}`);
+      if (!saved) return false;
+
+      const saveData: SaveData = JSON.parse(saved);
+      const node = getNode(scenario, saveData.state.currentNodeId);
+      if (!node) return false;
+
+      set({
+        gameState: saveData.state,
+        currentNode: node,
+        isEnded: false,
+        endingInfo: null,
+        isPlaying: true,
+      });
+
+      return true;
+    } catch (e) {
+      console.error('[VN] 슬롯 로드 실패:', e);
+      return false;
+    }
+  },
+
+  // 저장 로드 (자동저장에서)
   loadSave: () => {
     const { scenario } = get();
     if (!scenario) return false;
 
     try {
-      const saved = localStorage.getItem(SAVE_KEY);
+      const saved = localStorage.getItem(AUTO_SAVE_KEY);
       if (!saved) return false;
 
       const saveData: SaveData = JSON.parse(saved);
@@ -263,21 +328,76 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
   },
 
-  // 세이브 존재 확인
+  // 자동저장 존재 확인
   hasSave: () => {
     try {
-      return localStorage.getItem(SAVE_KEY) !== null;
+      return localStorage.getItem(AUTO_SAVE_KEY) !== null;
     } catch {
       return false;
     }
   },
 
-  // 세이브 삭제
+  // 슬롯 세이브 존재 확인
+  hasSlotSave: (slot: number) => {
+    try {
+      return localStorage.getItem(`${SAVE_KEY_PREFIX}_${slot}`) !== null;
+    } catch {
+      return false;
+    }
+  },
+
+  // 슬롯 정보 가져오기
+  getSlotInfo: (slot: number) => {
+    try {
+      const saved = localStorage.getItem(`${SAVE_KEY_PREFIX}_${slot}`);
+      if (!saved) return null;
+
+      const saveData: SaveData = JSON.parse(saved);
+      const nodeId = saveData.state.currentNodeId;
+      let chapter = '프롤로그';
+      if (nodeId.startsWith('C1')) chapter = 'Chapter 1';
+      else if (nodeId.startsWith('C2')) chapter = 'Chapter 2';
+      else if (nodeId.startsWith('C3')) chapter = 'Chapter 3';
+
+      return {
+        timestamp: saveData.timestamp,
+        chapter,
+        nodeId,
+      };
+    } catch {
+      return null;
+    }
+  },
+
+  // 모든 세이브 슬롯 정보
+  getAllSaveSlots: () => {
+    const slots: (SaveData | null)[] = [];
+    for (let i = 0; i < MAX_SAVE_SLOTS; i++) {
+      try {
+        const saved = localStorage.getItem(`${SAVE_KEY_PREFIX}_${i}`);
+        slots.push(saved ? JSON.parse(saved) : null);
+      } catch {
+        slots.push(null);
+      }
+    }
+    return slots;
+  },
+
+  // 자동저장 삭제
   deleteSave: () => {
     try {
-      localStorage.removeItem(SAVE_KEY);
+      localStorage.removeItem(AUTO_SAVE_KEY);
     } catch (e) {
       console.error('[VN] 세이브 삭제 실패:', e);
+    }
+  },
+
+  // 슬롯 삭제
+  deleteSlot: (slot: number) => {
+    try {
+      localStorage.removeItem(`${SAVE_KEY_PREFIX}_${slot}`);
+    } catch (e) {
+      console.error('[VN] 슬롯 삭제 실패:', e);
     }
   },
 
@@ -289,6 +409,27 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // 로그 토글
   toggleLog: () => {
     set((state) => ({ showLog: !state.showLog }));
+  },
+
+  // 자동 모드 토글
+  toggleAutoMode: () => {
+    set((state) => ({
+      autoMode: !state.autoMode,
+      skipMode: false // 자동 모드 켜면 스킵 모드 끔
+    }));
+  },
+
+  // 스킵 모드 토글
+  toggleSkipMode: () => {
+    set((state) => ({
+      skipMode: !state.skipMode,
+      autoMode: false // 스킵 모드 켜면 자동 모드 끔
+    }));
+  },
+
+  // 텍스트 속도 설정
+  setTextSpeed: (speed) => {
+    set({ textSpeed: Math.max(1, Math.min(5, speed)) });
   },
 
   // 타이틀로 돌아가기

@@ -87,32 +87,63 @@ export const CG_COLLECTION: CGItem[] = [
   },
 ];
 
+// 엔딩 정보 타입
+export interface EndingInfo {
+  id: string;
+  title: string;
+  description: string;
+  character?: string;
+  special?: 'harem' | 'true' | 'solo';
+}
+
+// 엔딩 목록
+export const ENDINGS: EndingInfo[] = [
+  { id: 'E1', title: '유나 엔딩', description: '소꿉친구와의 영원한 약속', character: '유나' },
+  { id: 'E2', title: '서연 엔딩', description: '선배와의 졸업 후 재회', character: '서연' },
+  { id: 'E3', title: '하린 엔딩', description: '후배와 함께하는 새로운 시작', character: '하린' },
+  { id: 'E4', title: '하렘 엔딩', description: '모두와 함께하는 특별한 결말', special: 'harem' },
+  { id: 'E5', title: '혼자 엔딩', description: '자기 발전을 선택한 결말', special: 'solo' },
+  { id: 'E6', title: '트루 엔딩', description: '진정한 사랑을 찾은 완벽한 결말', special: 'true' },
+];
+
 interface GalleryState {
   unlockedCGs: string[];
+  unlockedEndings: string[];
 
   // 액션
   unlockCG: (cgId: string) => void;
+  unlockEnding: (endingId: string) => void;
   isUnlocked: (cgId: string) => boolean;
+  isEndingUnlocked: (endingId: string) => boolean;
   getUnlockedCount: () => number;
   getTotalCount: () => number;
   getProgress: () => number;
+  getEndingProgress: () => { unlocked: number; total: number };
   resetGallery: () => void;
 }
 
+const ENDINGS_KEY = 'campus_harem_vn_endings';
+
 export const useGalleryStore = create<GalleryState>((set, get) => {
   // 저장된 갤러리 데이터 로드
-  let savedData: string[] = [];
+  let savedCGs: string[] = [];
+  let savedEndings: string[] = [];
   try {
-    const saved = localStorage.getItem(GALLERY_KEY);
-    if (saved) {
-      savedData = JSON.parse(saved);
+    const savedCG = localStorage.getItem(GALLERY_KEY);
+    if (savedCG) {
+      savedCGs = JSON.parse(savedCG);
+    }
+    const savedEnd = localStorage.getItem(ENDINGS_KEY);
+    if (savedEnd) {
+      savedEndings = JSON.parse(savedEnd);
     }
   } catch (e) {
     console.error('[Gallery] 로드 실패:', e);
   }
 
   return {
-    unlockedCGs: savedData,
+    unlockedCGs: savedCGs,
+    unlockedEndings: savedEndings,
 
     unlockCG: (cgId) => {
       const { unlockedCGs } = get();
@@ -129,8 +160,27 @@ export const useGalleryStore = create<GalleryState>((set, get) => {
       }
     },
 
+    unlockEnding: (endingId) => {
+      const { unlockedEndings } = get();
+      if (!unlockedEndings.includes(endingId)) {
+        const newUnlocked = [...unlockedEndings, endingId];
+        set({ unlockedEndings: newUnlocked });
+
+        // 저장
+        try {
+          localStorage.setItem(ENDINGS_KEY, JSON.stringify(newUnlocked));
+        } catch (e) {
+          console.error('[Gallery] 엔딩 저장 실패:', e);
+        }
+      }
+    },
+
     isUnlocked: (cgId) => {
       return get().unlockedCGs.includes(cgId);
+    },
+
+    isEndingUnlocked: (endingId) => {
+      return get().unlockedEndings.includes(endingId);
     },
 
     getUnlockedCount: () => {
@@ -146,10 +196,19 @@ export const useGalleryStore = create<GalleryState>((set, get) => {
       return Math.round((unlockedCGs.length / CG_COLLECTION.length) * 100);
     },
 
+    getEndingProgress: () => {
+      const { unlockedEndings } = get();
+      return {
+        unlocked: unlockedEndings.length,
+        total: ENDINGS.length,
+      };
+    },
+
     resetGallery: () => {
-      set({ unlockedCGs: [] });
+      set({ unlockedCGs: [], unlockedEndings: [] });
       try {
         localStorage.removeItem(GALLERY_KEY);
+        localStorage.removeItem(ENDINGS_KEY);
       } catch (e) {
         console.error('[Gallery] 리셋 실패:', e);
       }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useGameStore } from './game/store';
 import { validateScenario } from './game/engine';
+import { preloadAllAssets } from './game/assetPreloader';
 import type { Scenario } from './game/types';
 import TitleScreen from './components/TitleScreen';
 import GameScreen from './components/GameScreen';
@@ -9,6 +10,8 @@ import scenarioData from './data/scenario.json';
 function App() {
   const { scenario, isPlaying, loadScenario } = useGameStore();
   const [error, setError] = useState<string | null>(null);
+  const [loadProgress, setLoadProgress] = useState(0);
+  const [isPreloading, setIsPreloading] = useState(true);
 
   useEffect(() => {
     // 시나리오 로드 및 검증
@@ -22,6 +25,13 @@ function App() {
       }
 
       loadScenario(data);
+
+      // 에셋 프리로드 (백그라운드)
+      preloadAllAssets((loaded, total) => {
+        setLoadProgress(Math.round((loaded / total) * 100));
+      }).then(() => {
+        setIsPreloading(false);
+      });
     } catch (e) {
       setError(`시나리오 로드 실패: ${e}`);
     }
@@ -41,11 +51,16 @@ function App() {
   }
 
   // 로딩 중
-  if (!scenario) {
+  if (!scenario || isPreloading) {
     return (
       <div className="app loading-screen">
         <div className="loading-spinner" />
-        <p>로딩 중...</p>
+        <p>로딩 중... {loadProgress > 0 ? `${loadProgress}%` : ''}</p>
+        {loadProgress > 0 && (
+          <div className="loading-progress-bar">
+            <div className="loading-progress-fill" style={{ width: `${loadProgress}%` }} />
+          </div>
+        )}
       </div>
     );
   }

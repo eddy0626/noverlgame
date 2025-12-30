@@ -1,10 +1,63 @@
+import { useEffect, useCallback, useRef } from 'react';
 import { useGameStore } from '../game/store';
 import { useAudioStore } from '../game/audioManager';
 import type { SceneNode } from '../game/types';
 
 function TextBox() {
-  const { currentNode, advanceScene, fontSize } = useGameStore();
+  const { currentNode, advanceScene, fontSize, autoMode, skipMode, textSpeed } = useGameStore();
   const { playSfx } = useAudioStore();
+  const autoTimerRef = useRef<number | null>(null);
+
+  const handleAdvance = useCallback(() => {
+    playSfx('message');
+    advanceScene();
+  }, [playSfx, advanceScene]);
+
+  // 키보드 컨트롤 (Space, Enter)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        handleAdvance();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleAdvance]);
+
+  // 자동/스킵 모드 처리
+  useEffect(() => {
+    // 이전 타이머 정리
+    if (autoTimerRef.current) {
+      clearTimeout(autoTimerRef.current);
+      autoTimerRef.current = null;
+    }
+
+    if (!currentNode || currentNode.type !== 'scene') return;
+
+    if (skipMode) {
+      // 스킵 모드: 매우 빠르게 진행 (100ms)
+      autoTimerRef.current = window.setTimeout(() => {
+        advanceScene();
+      }, 100);
+    } else if (autoMode) {
+      // 자동 모드: 텍스트 길이와 속도에 따라 대기
+      const textLength = (currentNode as SceneNode).text?.length || 0;
+      const baseDelay = 3000 - (textSpeed - 1) * 500; // 속도 1: 3s, 속도 5: 1s
+      const delay = Math.max(1000, baseDelay + textLength * 30);
+
+      autoTimerRef.current = window.setTimeout(() => {
+        advanceScene();
+      }, delay);
+    }
+
+    return () => {
+      if (autoTimerRef.current) {
+        clearTimeout(autoTimerRef.current);
+      }
+    };
+  }, [currentNode, autoMode, skipMode, textSpeed, advanceScene]);
 
   if (!currentNode || currentNode.type !== 'scene') {
     return null;
@@ -23,15 +76,10 @@ function TextBox() {
     return '';
   };
 
-  const handleClick = () => {
-    playSfx('message');
-    advanceScene();
-  };
-
   return (
     <div
       className="textbox"
-      onClick={handleClick}
+      onClick={handleAdvance}
       style={{ fontSize: `${fontSize}px` }}
     >
       {/* 코너 장식 */}
@@ -53,7 +101,7 @@ function TextBox() {
       {/* 탭 힌트 */}
       <div className="tap-hint">
         <span className="tap-icon">▼</span>
-        탭하여 계속
+        클릭 또는 Space/Enter
       </div>
     </div>
   );

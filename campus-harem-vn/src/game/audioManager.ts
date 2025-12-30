@@ -41,6 +41,60 @@ export const SFX_SOUNDS: Record<string, string> = {
 let bgmAudio: HTMLAudioElement | null = null;
 const sfxCache: Record<string, HTMLAudioElement> = {};
 
+// 페이드 설정
+const FADE_DURATION = 500; // ms
+let fadeInterval: number | null = null;
+
+// 페이드 아웃 헬퍼
+function fadeOut(audio: HTMLAudioElement, duration: number): Promise<void> {
+  return new Promise((resolve) => {
+    if (fadeInterval) {
+      clearInterval(fadeInterval);
+    }
+
+    const startVolume = audio.volume;
+    const steps = 20;
+    const stepTime = duration / steps;
+    const volumeStep = startVolume / steps;
+    let currentStep = 0;
+
+    fadeInterval = window.setInterval(() => {
+      currentStep++;
+      audio.volume = Math.max(0, startVolume - volumeStep * currentStep);
+
+      if (currentStep >= steps) {
+        if (fadeInterval) clearInterval(fadeInterval);
+        fadeInterval = null;
+        audio.pause();
+        resolve();
+      }
+    }, stepTime);
+  });
+}
+
+// 페이드 인 헬퍼
+function fadeIn(audio: HTMLAudioElement, targetVolume: number, duration: number): void {
+  if (fadeInterval) {
+    clearInterval(fadeInterval);
+  }
+
+  audio.volume = 0;
+  const steps = 20;
+  const stepTime = duration / steps;
+  const volumeStep = targetVolume / steps;
+  let currentStep = 0;
+
+  fadeInterval = window.setInterval(() => {
+    currentStep++;
+    audio.volume = Math.min(targetVolume, volumeStep * currentStep);
+
+    if (currentStep >= steps) {
+      if (fadeInterval) clearInterval(fadeInterval);
+      fadeInterval = null;
+    }
+  }, stepTime);
+}
+
 export const useAudioStore = create<AudioState>((set, get) => ({
   bgmVolume: 0.5,
   sfxVolume: 0.7,
@@ -66,7 +120,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     }
   },
 
-  playBgm: (track) => {
+  playBgm: async (track) => {
     const { currentBgm, bgmVolume, isMuted } = get();
     const trackUrl = BGM_TRACKS[track] || track;
 
@@ -75,17 +129,24 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       return;
     }
 
-    // 기존 BGM 정지
-    if (bgmAudio) {
-      bgmAudio.pause();
+    // 기존 BGM 페이드 아웃
+    if (bgmAudio && !bgmAudio.paused) {
+      await fadeOut(bgmAudio, FADE_DURATION);
       bgmAudio.currentTime = 0;
     }
 
-    // 새 BGM 재생
+    // 새 BGM 재생 (페이드 인)
     bgmAudio = new Audio(trackUrl);
     bgmAudio.loop = true;
-    bgmAudio.volume = isMuted ? 0 : bgmVolume;
-    bgmAudio.play().catch(() => {
+
+    const targetVolume = isMuted ? 0 : bgmVolume;
+    bgmAudio.volume = 0;
+
+    bgmAudio.play().then(() => {
+      if (!isMuted && bgmAudio) {
+        fadeIn(bgmAudio, targetVolume, FADE_DURATION);
+      }
+    }).catch(() => {
       // 자동 재생 차단 시 무시
       console.log('[Audio] BGM autoplay blocked');
     });
@@ -93,9 +154,9 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     set({ currentBgm: track });
   },
 
-  stopBgm: () => {
-    if (bgmAudio) {
-      bgmAudio.pause();
+  stopBgm: async () => {
+    if (bgmAudio && !bgmAudio.paused) {
+      await fadeOut(bgmAudio, FADE_DURATION);
       bgmAudio.currentTime = 0;
     }
     set({ currentBgm: null });

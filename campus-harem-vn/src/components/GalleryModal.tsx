@@ -3,16 +3,19 @@
 // ========================================
 
 import { useState } from 'react';
-import { useGalleryStore, CG_COLLECTION, CGItem } from '../game/galleryManager';
+import { useGalleryStore, CG_COLLECTION, CGItem, ENDINGS } from '../game/galleryManager';
 
 interface GalleryModalProps {
   onClose: () => void;
 }
 
+type ViewMode = 'gallery' | 'endings';
+
 function GalleryModal({ onClose }: GalleryModalProps) {
-  const { isUnlocked, getProgress, getUnlockedCount, getTotalCount } = useGalleryStore();
+  const { isUnlocked, isEndingUnlocked, getProgress, getUnlockedCount, getTotalCount, getEndingProgress } = useGalleryStore();
   const [selectedCG, setSelectedCG] = useState<CGItem | null>(null);
   const [filter, setFilter] = useState<'all' | 'event' | 'ending'>('all');
+  const [viewMode, setViewMode] = useState<ViewMode>('gallery');
 
   const filteredCGs = CG_COLLECTION.filter((cg) => {
     if (filter === 'all') return true;
@@ -77,84 +80,163 @@ function GalleryModal({ onClose }: GalleryModalProps) {
     );
   }
 
+  const endingProgress = getEndingProgress();
+
+  // 엔딩 뷰 렌더링
+  const renderEndingsView = () => (
+    <>
+      {/* 엔딩 진행도 */}
+      <div className="gallery-progress">
+        <div className="progress-bar">
+          <div
+            className="progress-fill endings"
+            style={{ width: `${(endingProgress.unlocked / endingProgress.total) * 100}%` }}
+          />
+        </div>
+        <span className="progress-text">
+          {endingProgress.unlocked} / {endingProgress.total} 엔딩 해금
+        </span>
+      </div>
+
+      {/* 엔딩 리스트 */}
+      <div className="modal-content">
+        <div className="endings-grid">
+          {ENDINGS.map((ending) => {
+            const unlocked = isEndingUnlocked(ending.id);
+            return (
+              <div
+                key={ending.id}
+                className={`ending-card ${unlocked ? 'unlocked' : 'locked'} ${ending.special || ''}`}
+              >
+                <div className="ending-icon">
+                  {unlocked ? (
+                    ending.special === 'true' ? '👑' :
+                    ending.special === 'harem' ? '💕' :
+                    ending.character ? '❤️' : '⭐'
+                  ) : '🔒'}
+                </div>
+                <div className="ending-info">
+                  <h4 className="ending-title">
+                    {unlocked ? ending.title : '???'}
+                  </h4>
+                  <p className="ending-desc">
+                    {unlocked ? ending.description : '아직 발견하지 못한 엔딩'}
+                  </p>
+                  {unlocked && ending.character && (
+                    <span
+                      className="ending-character"
+                      style={{ color: getCharacterColor(ending.character) }}
+                    >
+                      ♥ {ending.character}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal gallery-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>🖼️ 갤러리</h3>
+          <h3>{viewMode === 'gallery' ? '🖼️ 갤러리' : '🏆 엔딩 목록'}</h3>
           <button className="close-btn" onClick={onClose}>×</button>
         </div>
 
-        {/* 진행도 */}
-        <div className="gallery-progress">
-          <div className="progress-bar">
-            <div
-              className="progress-fill"
-              style={{ width: `${getProgress()}%` }}
-            />
-          </div>
-          <span className="progress-text">
-            {getUnlockedCount()} / {getTotalCount()} ({getProgress()}%)
-          </span>
-        </div>
-
-        {/* 필터 탭 */}
-        <div className="gallery-tabs">
+        {/* 뷰 모드 토글 */}
+        <div className="view-mode-toggle">
           <button
-            className={`tab-btn ${filter === 'all' ? 'active' : ''}`}
-            onClick={() => setFilter('all')}
+            className={`toggle-btn ${viewMode === 'gallery' ? 'active' : ''}`}
+            onClick={() => setViewMode('gallery')}
           >
-            전체
+            🖼️ CG 갤러리
           </button>
           <button
-            className={`tab-btn ${filter === 'event' ? 'active' : ''}`}
-            onClick={() => setFilter('event')}
+            className={`toggle-btn ${viewMode === 'endings' ? 'active' : ''}`}
+            onClick={() => setViewMode('endings')}
           >
-            이벤트
-          </button>
-          <button
-            className={`tab-btn ${filter === 'ending' ? 'active' : ''}`}
-            onClick={() => setFilter('ending')}
-          >
-            엔딩
+            🏆 엔딩 ({endingProgress.unlocked}/{endingProgress.total})
           </button>
         </div>
 
-        {/* CG 그리드 */}
-        <div className="modal-content">
-          <div className="cg-grid">
-            {filteredCGs.map((cg) => {
-              const unlocked = isUnlocked(cg.id);
-              return (
+        {viewMode === 'endings' ? renderEndingsView() : (
+          <>
+            {/* 진행도 */}
+            <div className="gallery-progress">
+              <div className="progress-bar">
                 <div
-                  key={cg.id}
-                  className={`cg-card ${unlocked ? 'unlocked' : 'locked'}`}
-                  onClick={() => setSelectedCG(cg)}
-                >
-                  <div
-                    className="cg-thumbnail"
-                    style={{
-                      background: unlocked
-                        ? `linear-gradient(135deg, ${getCharacterColor(cg.character)}44 0%, var(--bg-tertiary) 100%)`
-                        : 'var(--bg-tertiary)',
-                    }}
-                  >
-                    {unlocked ? (
-                      <span className="cg-icon">
-                        {cg.category === 'ending' ? '👑' : '💫'}
-                      </span>
-                    ) : (
-                      <span className="cg-lock">🔒</span>
-                    )}
-                  </div>
-                  <p className="cg-title">
-                    {unlocked ? cg.title : '???'}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                  className="progress-fill"
+                  style={{ width: `${getProgress()}%` }}
+                />
+              </div>
+              <span className="progress-text">
+                {getUnlockedCount()} / {getTotalCount()} ({getProgress()}%)
+              </span>
+            </div>
+
+            {/* 필터 탭 */}
+            <div className="gallery-tabs">
+              <button
+                className={`tab-btn ${filter === 'all' ? 'active' : ''}`}
+                onClick={() => setFilter('all')}
+              >
+                전체
+              </button>
+              <button
+                className={`tab-btn ${filter === 'event' ? 'active' : ''}`}
+                onClick={() => setFilter('event')}
+              >
+                이벤트
+              </button>
+              <button
+                className={`tab-btn ${filter === 'ending' ? 'active' : ''}`}
+                onClick={() => setFilter('ending')}
+              >
+                엔딩
+              </button>
+            </div>
+
+            {/* CG 그리드 */}
+            <div className="modal-content">
+              <div className="cg-grid">
+                {filteredCGs.map((cg) => {
+                  const unlocked = isUnlocked(cg.id);
+                  return (
+                    <div
+                      key={cg.id}
+                      className={`cg-card ${unlocked ? 'unlocked' : 'locked'}`}
+                      onClick={() => setSelectedCG(cg)}
+                    >
+                      <div
+                        className="cg-thumbnail"
+                        style={{
+                          background: unlocked
+                            ? `linear-gradient(135deg, ${getCharacterColor(cg.character)}44 0%, var(--bg-tertiary) 100%)`
+                            : 'var(--bg-tertiary)',
+                        }}
+                      >
+                        {unlocked ? (
+                          <span className="cg-icon">
+                            {cg.category === 'ending' ? '👑' : '💫'}
+                          </span>
+                        ) : (
+                          <span className="cg-lock">🔒</span>
+                        )}
+                      </div>
+                      <p className="cg-title">
+                        {unlocked ? cg.title : '???'}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -6,8 +6,10 @@ interface SettingsModalProps {
 }
 
 function SettingsModal({ onClose }: SettingsModalProps) {
-  const { fontSize, setFontSize, deleteSave, returnToTitle } = useGameStore();
+  const { fontSize, setFontSize, textSpeed, setTextSpeed, deleteSave, returnToTitle } = useGameStore();
   const { bgmVolume, sfxVolume, isMuted, setBgmVolume, setSfxVolume, toggleMute, playSfx } = useAudioStore();
+
+  const speedLabels = ['매우 느림', '느림', '보통', '빠름', '매우 빠름'];
 
   const handleReset = () => {
     if (confirm('정말로 저장 데이터를 삭제하시겠습니까?')) {
@@ -51,6 +53,28 @@ function SettingsModal({ onClose }: SettingsModalProps) {
                 이것은 미리보기 텍스트입니다.
               </p>
             </div>
+          </div>
+
+          <hr className="setting-divider" />
+
+          {/* 텍스트 속도 설정 */}
+          <div className="setting-section">
+            <div className="setting-row">
+              <label>⏱️ 텍스트 속도</label>
+              <div className="volume-control">
+                <input
+                  type="range"
+                  min="1"
+                  max="5"
+                  step="1"
+                  value={textSpeed}
+                  onChange={(e) => setTextSpeed(parseInt(e.target.value))}
+                  className="volume-slider"
+                />
+                <span className="volume-value">{speedLabels[textSpeed - 1]}</span>
+              </div>
+            </div>
+            <p className="setting-hint">자동 모드에서 다음 대사로 넘어가는 속도</p>
           </div>
 
           <hr className="setting-divider" />
