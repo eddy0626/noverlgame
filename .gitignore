@@ -1,0 +1,26 @@
+bin/
+obj/
+/packages/
+riderModule.iml
+/_ReSharper.Caches/
+
+# IDE
+.idea/
+*.user
+*.suo
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Claude
+.claude/
+
+# Node
+node_modules/
+dist/
+
+# Misc
+nul
+*.log
